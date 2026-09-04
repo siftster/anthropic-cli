@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.31.0 (2026-09-04)
+
+Full Changelog: [v1.30.0...v1.31.0](https://github.com/anthropics/anthropic-cli/compare/v1.30.0...v1.31.0)
+
+### Features
+
+* **api:** add named types for organization compliance settings state ([4aeee85](https://github.com/anthropics/anthropic-cli/commit/4aeee858da0cbeb92c25db9b1cfb33ee4d83467c))
+
+
+### Chores
+
+* **ci:** cache Go build output in the build job ([da8ff8c](https://github.com/anthropics/anthropic-cli/commit/da8ff8c877e6a500d4569e12df4363ff81e84053))
+* **tests:** reword the skip reason on the path-level query param tests ([fa58532](https://github.com/anthropics/anthropic-cli/commit/fa58532c62b35785be016ce35581e70171eb7702))
+
 ## 1.30.0 (2026-09-03)
 
 Full Changelog: [v1.29.0...v1.30.0](https://github.com/anthropics/anthropic-cli/compare/v1.29.0...v1.30.0)
