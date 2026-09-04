@@ -1,6 +1,8 @@
 package autocomplete
 
 import (
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -430,4 +432,31 @@ func TestGetCompletions_AllFlagsWhenNoPrefix(t *testing.T) {
 
 	// Should show all flag variations
 	assert.GreaterOrEqual(t, len(result.Completions), 6) // -o, --output, -v, --verbose, -f, --format
+}
+
+func TestCompletionScripts_QuoteFilenames(t *testing.T) {
+	t.Parallel()
+
+	pwsh, err := shellCompletions[CompletionStylePowershell](nil, "app")
+	assert.NoError(t, err)
+	assert.Contains(t, pwsh, "EscapeSingleQuotedStringContent")
+	rawProviderItem := regexp.MustCompile(`CompletionResult\]::new\(\s*(\$\w+),\s*\$\w+,\s*'ProviderItem'`)
+	assert.NotRegexp(t, rawProviderItem, pwsh, "filesystem names must not be used as CompletionText unquoted")
+	assert.Contains(t, pwsh, "$Prefix + $typedDir + $_.Name", "file completions must keep the typed directory, not just the leaf")
+	assert.NotContains(t, pwsh, `-Path "$wordToComplete`, "globbing must use the quote-stripped word")
+	assert.Contains(t, pwsh, `+\z'`, `the bare-name fast path must anchor with \z; .NET '$' also matches before a trailing newline`)
+	assert.NotContains(t, pwsh, `]+$')`)
+
+	bash, err := shellCompletions[CompletionStyleBash](nil, "app")
+	assert.NoError(t, err)
+	fileBranches := strings.Count(bash, "compgen -f")
+	assert.Equal(t, fileBranches, strings.Count(bash, "compopt -o filenames"), "every compgen -f branch must set -o filenames")
+	assert.Contains(t, bash, "__app_dequote \"$before_at\"", "the @file prefix must be dequoted before readline re-quotes COMPREPLY")
+	assert.NotContains(t, bash, `sed "s|^|$prefix|"`)
+
+	for style, render := range shellCompletions {
+		script, err := render(nil, "app")
+		assert.NoError(t, err)
+		assert.NotContains(t, script, "/tmp", "%s completion script must not write to a shared temp path", style)
+	}
 }
