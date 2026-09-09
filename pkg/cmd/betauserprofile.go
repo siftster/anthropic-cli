@@ -12,7 +12,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-var betaUserProfilesCreate = cli.Command{
+var betaUserProfilesCreate = requestflag.WithInnerFlags(cli.Command{
 	Name:    "create",
 	Usage:   "Create User Profile",
 	Suggest: true,
@@ -24,8 +24,12 @@ var betaUserProfilesCreate = cli.Command{
 		},
 		&requestflag.Flag[*string]{
 			Name:     "external-id",
-			Usage:    "Platform's own identifier for this user. Not enforced unique. Maximum 255 characters.",
+			Usage:    "Platform's own identifier for this user. Not enforced unique. Maximum 255 characters. Accepted under the `user-profiles-2026-03-24` and `user-profiles-2026-08-18` beta headers; under `user-profiles-2026-09-04` send `external_user_details.reference_id` instead.",
 			BodyPath: "external_id",
+		},
+		&requestflag.Flag[map[string]any]{
+			Name:     "external-user-details",
+			BodyPath: "external_user_details",
 		},
 		&requestflag.Flag[any]{
 			Name:     "external-user-onboarded-at",
@@ -50,7 +54,45 @@ var betaUserProfilesCreate = cli.Command{
 	},
 	Action:          handleBetaUserProfilesCreate,
 	HideHelpCommand: true,
-}
+}, map[string][]requestflag.HasOuterFlag{
+	"external-user-details": {
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.account-status",
+			Usage:      "The status of the entity's account on the platform, as the platform states it: `active`; `suspended`, when the platform has restricted the account and may restore it; or `blocked`, when the platform has barred it. It records the platform's decision only; the statuses in `trust_grants` are Anthropic's and do not follow it.",
+			InnerField: "account_status",
+		},
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.country",
+			Usage:      "The country of the entity (not of the platform), as the platform determines it: an ISO 3166-1 alpha-2 code in upper case, for example `US`. Only the form, two uppercase ASCII letters, is checked.",
+			InnerField: "country",
+		},
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.email-hash",
+			Usage:      "A hash of the entity's email address, computed by the platform. Anthropic treats it as an opaque string and does not prescribe the hash function. 1 to 255 characters.",
+			InnerField: "email_hash",
+		},
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.entity-type",
+			Usage:      "What kind of entity the profile represents, as the platform states it: `individual`, `business`, `non_profit` or `government`.",
+			InnerField: "entity_type",
+		},
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.name-hash",
+			Usage:      "A hash of the entity's name, computed by the platform. Anthropic treats it as an opaque string and does not prescribe the hash function. 1 to 255 characters.",
+			InnerField: "name_hash",
+		},
+		&requestflag.InnerFlag[any]{
+			Name:       "external-user-details.onboarded-at",
+			Usage:      "A timestamp in RFC 3339 format",
+			InnerField: "onboarded_at",
+		},
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.reference-id",
+			Usage:      "The platform's own reference for the entity, for example the key of the end-user's row in the platform's database. Not interpreted by Anthropic and not enforced unique. 1 to 255 characters.",
+			InnerField: "reference_id",
+		},
+	},
+})
 
 var betaUserProfilesRetrieve = cli.Command{
 	Name:    "retrieve",
@@ -72,7 +114,7 @@ var betaUserProfilesRetrieve = cli.Command{
 	HideHelpCommand: true,
 }
 
-var betaUserProfilesUpdate = cli.Command{
+var betaUserProfilesUpdate = requestflag.WithInnerFlags(cli.Command{
 	Name:    "update",
 	Usage:   "Update User Profile",
 	Suggest: true,
@@ -89,8 +131,12 @@ var betaUserProfilesUpdate = cli.Command{
 		},
 		&requestflag.Flag[*string]{
 			Name:     "external-id",
-			Usage:    "If present, replaces the stored external_id. Omit to leave unchanged. Maximum 255 characters.",
+			Usage:    "If present, replaces the stored external_id. Omit to leave unchanged. Maximum 255 characters. Accepted under the `user-profiles-2026-03-24` and `user-profiles-2026-08-18` beta headers; under `user-profiles-2026-09-04` send `external_user_details.reference_id` instead.",
 			BodyPath: "external_id",
+		},
+		&requestflag.Flag[map[string]any]{
+			Name:     "external-user-details",
+			BodyPath: "external_user_details",
 		},
 		&requestflag.Flag[any]{
 			Name:     "external-user-onboarded-at",
@@ -115,7 +161,45 @@ var betaUserProfilesUpdate = cli.Command{
 	},
 	Action:          handleBetaUserProfilesUpdate,
 	HideHelpCommand: true,
-}
+}, map[string][]requestflag.HasOuterFlag{
+	"external-user-details": {
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.account-status",
+			Usage:      "The status of the entity's account on the platform, as the platform states it: `active`; `suspended`, when the platform has restricted the account and may restore it; or `blocked`, when the platform has barred it. It records the platform's decision only; the statuses in `trust_grants` are Anthropic's and do not follow it.",
+			InnerField: "account_status",
+		},
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.country",
+			Usage:      "The country of the entity (not of the platform), as the platform determines it: an ISO 3166-1 alpha-2 code in upper case, for example `US`. Only the form, two uppercase ASCII letters, is checked.",
+			InnerField: "country",
+		},
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.email-hash",
+			Usage:      "A hash of the entity's email address, computed by the platform. Anthropic treats it as an opaque string and does not prescribe the hash function. 1 to 255 characters.",
+			InnerField: "email_hash",
+		},
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.entity-type",
+			Usage:      "What kind of entity the profile represents, as the platform states it: `individual`, `business`, `non_profit` or `government`.",
+			InnerField: "entity_type",
+		},
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.name-hash",
+			Usage:      "A hash of the entity's name, computed by the platform. Anthropic treats it as an opaque string and does not prescribe the hash function. 1 to 255 characters.",
+			InnerField: "name_hash",
+		},
+		&requestflag.InnerFlag[any]{
+			Name:       "external-user-details.onboarded-at",
+			Usage:      "A timestamp in RFC 3339 format",
+			InnerField: "onboarded_at",
+		},
+		&requestflag.InnerFlag[*string]{
+			Name:       "external-user-details.reference-id",
+			Usage:      "The platform's own reference for the entity, for example the key of the end-user's row in the platform's database. Not interpreted by Anthropic and not enforced unique. 1 to 255 characters.",
+			InnerField: "reference_id",
+		},
+	},
+})
 
 var betaUserProfilesList = cli.Command{
 	Name:    "list",
