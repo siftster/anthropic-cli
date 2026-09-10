@@ -151,7 +151,7 @@ var betaDeploymentsCreate = requestflag.WithInnerFlags(cli.Command{
 		},
 		&requestflag.InnerFlag[string]{
 			Name:       "resource.authorization-token",
-			Usage:      "GitHub authorization token used to clone the repository.",
+			Usage:      "GitHub authorization token used to clone the repository. Required for private repositories; optional for public ones.",
 			InnerField: "authorization_token",
 		},
 		&requestflag.InnerFlag[any]{
@@ -370,7 +370,7 @@ var betaDeploymentsUpdate = requestflag.WithInnerFlags(cli.Command{
 		},
 		&requestflag.InnerFlag[string]{
 			Name:                  "resource.authorization-token",
-			Usage:                 "GitHub authorization token used to clone the repository.",
+			Usage:                 "GitHub authorization token used to clone the repository. Required for private repositories; optional for public ones.",
 			InnerField:            "authorization_token",
 			OuterIsArrayOfObjects: true,
 		},
