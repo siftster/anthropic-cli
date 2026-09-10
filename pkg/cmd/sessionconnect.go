@@ -79,7 +79,7 @@ func handleSessionsConnect(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 	client := anthropic.NewClient(append(getDefaultRequestOptions(cmd), options...)...)
-	sessionURL := consoleURL(cmd) + "/workspaces/default/sessions/" + sessionID
+	sessionURL := sessionConsoleURL(cmd) + "/workspaces/default/sessions/" + sessionID
 
 	if useWeb {
 		return connectWeb(ctx, cmd, client, sessionID, sessionURL)
@@ -115,9 +115,11 @@ func connectTerminal(ctx context.Context, cmd *cli.Command, client anthropic.Cli
 	return tui.Run(ctx, conn, tui.Options{Verbose: cmd.Bool("verbose"), ConsoleURL: sessionURL})
 }
 
-// consoleURL is the Console the active profile signed in through, so links
-// open on the same deployment the credentials belong to.
-func consoleURL(cmd *cli.Command) string {
+// sessionConsoleURL is the Console the active profile signed in through, so
+// links open on the same deployment the credentials belong to. Unlike
+// consoleURL it falls back to the default Console, since a session link is
+// always shown.
+func sessionConsoleURL(cmd *cli.Command) string {
 	cfg, _ := loadProfileIfUsable(cmd)
 	return resolveConsoleURL("", cfg)
 }
