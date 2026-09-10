@@ -572,7 +572,9 @@ func TestResolveOAuthOption_Federation(t *testing.T) {
 // TestLoadProfileFillsClientIDDefault verifies that when a user_oauth profile
 // config omits client_id (the bootstrap-only-if-set case), the CLI fills in
 // oauthClientIDProd at request time so the SDK's refresh path has what it
-// needs. A non-empty client_id is left untouched.
+// needs. A non-empty client_id is left untouched, and an empty one stays empty
+// when the credentials hold no refresh_token (a hand-authored static-token
+// profile).
 func TestLoadProfileFillsClientIDDefault(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("ANTHROPIC_CONFIG_DIR", dir)
@@ -580,20 +582,20 @@ func TestLoadProfileFillsClientIDDefault(t *testing.T) {
 	clearEnv(t, "ANTHROPIC_API_KEY")
 	clearEnv(t, "ANTHROPIC_AUTH_TOKEN")
 
-	seed := func(name, clientID string) {
+	seed := func(name, clientID, refreshToken string) {
 		require.NoError(t, config.SaveProfile(dir, name, &config.Config{
 			AuthenticationInfo: &config.AuthenticationInfo{
 				Type: config.AuthenticationTypeUserOAuth, UserOAuth: &config.UserOAuth{ClientID: clientID},
 			},
 		}))
 		require.NoError(t, config.WriteCredentials(config.ProfileCredentialsPath(dir, name),
-			config.Credentials{AccessToken: "tok"}))
+			config.Credentials{AccessToken: "tok", RefreshToken: refreshToken}))
 		require.NoError(t, config.SetActiveProfile(dir, name))
 	}
 
 	t.Run("empty client_id gets prod default and warns once", func(t *testing.T) {
 		resetWarnOnce(t)
-		seed("noclient", "")
+		seed("noclient", "", "rt")
 		var cfg *config.Config
 		out := captureStderr(t, func() { cfg, _ = loadProfileIfUsable(nil) })
 		require.NotNil(t, cfg)
@@ -607,11 +609,21 @@ func TestLoadProfileFillsClientIDDefault(t *testing.T) {
 
 	t.Run("explicit client_id preserved without warning", func(t *testing.T) {
 		resetWarnOnce(t)
-		seed("withclient", "custom-client")
+		seed("withclient", "custom-client", "rt")
 		var cfg *config.Config
 		out := captureStderr(t, func() { cfg, _ = loadProfileIfUsable(nil) })
 		require.NotNil(t, cfg)
 		assert.Equal(t, "custom-client", cfg.AuthenticationInfo.UserOAuth.ClientID)
+		assert.Empty(t, out)
+	})
+
+	t.Run("static token: empty client_id without refresh_token stays empty", func(t *testing.T) {
+		resetWarnOnce(t)
+		seed("static", "", "")
+		var cfg *config.Config
+		out := captureStderr(t, func() { cfg, _ = loadProfileIfUsable(nil) })
+		require.NotNil(t, cfg)
+		assert.Empty(t, cfg.AuthenticationInfo.UserOAuth.ClientID)
 		assert.Empty(t, out)
 	})
 }
