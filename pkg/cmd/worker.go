@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -26,7 +28,7 @@ var workerCommand = cli.Command{
 	Suggest:  true,
 	Commands: []*cli.Command{
 		&workerPollCommand,
-		&workerRunCommand,
+		workerRunCommandDef(),
 	},
 }
 
@@ -49,23 +51,28 @@ var workerPollCommand = cli.Command{
 	HideHelpCommand: true,
 }
 
-var workerRunCommand = cli.Command{
-	Name:    "run",
-	Usage:   "Attach to a session and execute agent.tool_use events locally. Intended as a container ENTRYPOINT.",
-	Suggest: true,
-	Flags: []cli.Flag{
-		&cli.StringFlag{Name: "session-id", Required: true, Sources: cli.EnvVars("ANTHROPIC_SESSION_ID")},
-		&cli.StringFlag{Name: "environment-key", Required: true, Sources: cli.EnvVars("ANTHROPIC_ENVIRONMENT_KEY")},
-		&cli.StringFlag{Name: "work-id", Required: true, Sources: cli.EnvVars("ANTHROPIC_WORK_ID")},
-		&cli.StringFlag{Name: "environment-id", Required: true, Sources: cli.EnvVars("ANTHROPIC_ENVIRONMENT_ID")},
-		&cli.StringFlag{Name: "base-url", Sources: cli.EnvVars("ANTHROPIC_BASE_URL")},
-		&cli.StringFlag{Name: "workdir", Value: "."},
-		&cli.BoolFlag{Name: "unrestricted-paths", Usage: "let the file tools read/write outside the workdir (the workdir check is a guardrail for the file tools only, not a sandbox, and is not respected by bash)"},
-		&cli.DurationFlag{Name: "max-idle", Value: anthropic.DefaultMaxIdle, Usage: "stop this long after the session goes idle with stop_reason end_turn; 0 = no timeout"},
-		&cli.StringFlag{Name: "log-format", Value: "text"},
-	},
-	Action:          handleWorkerRun,
-	HideHelpCommand: true,
+// workerRunCommandDef returns a fresh `run` subcommand definition — urfave/cli
+// caches flag state on a Command across runs, so tests need their own instance.
+func workerRunCommandDef() *cli.Command {
+	return &cli.Command{
+		Name:    "run",
+		Usage:   "Attach to a session and execute agent.tool_use events locally, authorized by an environment key or a work secret. Intended as a container ENTRYPOINT.",
+		Suggest: true,
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "session-id", Required: true, Sources: cli.EnvVars("ANTHROPIC_SESSION_ID")},
+			&cli.StringFlag{Name: "environment-key", Sources: cli.EnvVars("ANTHROPIC_ENVIRONMENT_KEY"), Usage: "environment key that authorizes the run; optional when a work secret is provided"},
+			&cli.StringFlag{Name: "work-secret-file", Sources: cli.EnvVars("ANTHROPIC_WORK_SECRET_FILE"), Usage: "path to a file whose contents are the work item's secret; keeps the secret out of the environment that child processes inherit"},
+			&cli.StringFlag{Name: "work-id", Required: true, Sources: cli.EnvVars("ANTHROPIC_WORK_ID")},
+			&cli.StringFlag{Name: "environment-id", Required: true, Sources: cli.EnvVars("ANTHROPIC_ENVIRONMENT_ID")},
+			&cli.StringFlag{Name: "base-url", Sources: cli.EnvVars("ANTHROPIC_BASE_URL")},
+			&cli.StringFlag{Name: "workdir", Value: "."},
+			&cli.BoolFlag{Name: "unrestricted-paths", Usage: "let the file tools read/write outside the workdir (the workdir check is a guardrail for the file tools only, not a sandbox, and is not respected by bash)"},
+			&cli.DurationFlag{Name: "max-idle", Value: anthropic.DefaultMaxIdle, Usage: "stop this long after the session goes idle with stop_reason end_turn; 0 = no timeout"},
+			&cli.StringFlag{Name: "log-format", Value: "text"},
+		},
+		Action:          handleWorkerRun,
+		HideHelpCommand: true,
+	}
 }
 
 func handleWorkerPoll(ctx context.Context, cmd *cli.Command) error {
@@ -127,6 +134,11 @@ func handleWorkerPoll(ctx context.Context, cmd *cli.Command) error {
 }
 
 func handleWorkerRun(ctx context.Context, cmd *cli.Command) error {
+	environmentKey, workSecret, err := workerRunCredentials(cmd)
+	if err != nil {
+		return err
+	}
+
 	logger := newWorkerLogger(cmd.String("log-format"))
 	client := newWorkerClient(extraClientFlagsFromCmd(cmd))
 
@@ -159,8 +171,53 @@ func handleWorkerRun(ctx context.Context, cmd *cli.Command) error {
 		WorkID:         cmd.String("work-id"),
 		EnvironmentID:  cmd.String("environment-id"),
 		SessionID:      cmd.String("session-id"),
-		EnvironmentKey: cmd.String("environment-key"),
+		EnvironmentKey: environmentKey,
+		WorkSecret:     workSecret,
 	})
+}
+
+// workerRunCredentials resolves what authorizes a `run` invocation: the
+// environment key flag, and the whitespace-trimmed contents of
+// --work-secret-file as the work item's secret. A set file flag must yield a
+// secret, and at least one credential must be present (counting the
+// ANTHROPIC_WORK_SECRET variable the SDK reads on its own).
+func workerRunCredentials(cmd *cli.Command) (environmentKey, workSecret string, err error) {
+	environmentKey = cmd.String("environment-key")
+	if path := cmd.String("work-secret-file"); path != "" {
+		if err := refuseWorldAccessibleSecretFile(path); err != nil {
+			return "", "", err
+		}
+		buf, err := os.ReadFile(path)
+		if err != nil {
+			return "", "", fmt.Errorf("read work secret file: %w", err)
+		}
+		workSecret = strings.TrimSpace(string(buf))
+		if workSecret == "" {
+			return "", "", fmt.Errorf("work secret file %s is empty", path)
+		}
+	}
+	if environmentKey == "" && workSecret == "" && os.Getenv("ANTHROPIC_WORK_SECRET") == "" {
+		return "", "", errors.New("provide an environment key (--environment-key or ANTHROPIC_ENVIRONMENT_KEY) or a work secret (--work-secret-file, ANTHROPIC_WORK_SECRET_FILE, or ANTHROPIC_WORK_SECRET)")
+	}
+	return environmentKey, workSecret, nil
+}
+
+// refuseWorldAccessibleSecretFile rejects a work secret file that every user
+// on the machine can read or write. Group access stays allowed — Kubernetes
+// deployments write the token 0440 under another owner and the worker reads
+// it through the group bit. Skipped on Windows, whose mode bits are synthetic.
+func refuseWorldAccessibleSecretFile(path string) error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat work secret file: %w", err)
+	}
+	if mode := info.Mode().Perm(); mode&0o006 != 0 {
+		return fmt.Errorf("work secret file %s (mode %04o) is readable or writable by every user on this machine — run chmod o-rw on it", path, mode)
+	}
+	return nil
 }
 
 // errFatalWorker signals the poll loop should exit instead of looping.

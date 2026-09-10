@@ -27,8 +27,8 @@ Register-ArgumentCompleter -Native -CommandName __APPNAME__ -ScriptBlock {
   $filePart = $wordToComplete
   $forceFileCompletion = $false
 
-  # PowerShell includes quotes in $wordToComplete - strip them for pattern matching
-  # but preserve them in the prefix for the completion result
+  # PowerShell includes quotes in $wordToComplete - strip them for pattern matching;
+  # $toCompletionText re-quotes the result
   $wordContent = $wordToComplete
   $leadingQuote = ""
   if ($wordToComplete -match '^([''"])(.*)(\1)$') {
@@ -40,47 +40,54 @@ Register-ArgumentCompleter -Native -CommandName __APPNAME__ -ScriptBlock {
     $leadingQuote = $Matches[1]
     $wordContent = $Matches[2]
   }
+  # Globbing and re-escaping below need the literal text, not the quoted form's inner escapes.
+  if ($leadingQuote -eq "'") {
+    $wordContent = $wordContent -replace "''", "'"
+  } elseif ($leadingQuote -eq '"') {
+    $wordContent = $wordContent -replace '`(.)|"(")', '$1$2'
+  }
 
   if ($wordContent -match '^(.*)@(file://|data://)?(.*)$') {
-    $prefix = $leadingQuote + $Matches[1] + '@' + $Matches[2]
+    $prefix = $Matches[1] + '@' + $Matches[2]
     $filePart = $Matches[3]
     $forceFileCompletion = $true
   }
 
-  if ($forceFileCompletion) {
-    # Handle empty filePart (e.g., "@" or "@file://") by listing current directory
-    $items = if ([string]::IsNullOrEmpty($filePart)) {
+  # CompletionText is spliced into the command line verbatim, and `;` `&` `$(` and spaces are all
+  # legal in filenames: emit anything that is not plainly inert as an escaped single-quoted literal.
+  $toCompletionText = {
+    param([string]$Text)
+    if ($leadingQuote -eq '' -and $Text -match '\A[\w\-./\\:~]+\z') { return $Text }
+    "'" + [System.Management.Automation.Language.CodeGeneration]::EscapeSingleQuotedStringContent($Text) + "'"
+  }
+
+  # CompletionText replaces the whole word, so each result carries the typed prefix and directory,
+  # not just the leaf name Get-ChildItem returns.
+  $completeFiles = {
+    param([string]$Typed, [string]$Prefix)
+    $typedDir = if ($Typed -match '^(.*[\\/])') { $Matches[1] } else { '' }
+    $items = if ([string]::IsNullOrEmpty($Typed)) {
       Get-ChildItem -ErrorAction SilentlyContinue
     } else {
-      Get-ChildItem -Path "$filePart*" -ErrorAction SilentlyContinue
+      Get-ChildItem -Path "$Typed*" -ErrorAction SilentlyContinue
     }
     $items | ForEach-Object {
-      $completionText = if ($_.PSIsContainer) { $prefix + $_.Name + "/" } else { $prefix + $_.Name }
+      $itemText = $Prefix + $typedDir + $_.Name + $(if ($_.PSIsContainer) { '/' } else { '' })
       [System.Management.Automation.CompletionResult]::new(
-        $completionText,
-        $completionText,
+        (& $toCompletionText $itemText),
+        $itemText,
         'ProviderItem',
-        $completionText
+        $itemText
       )
     }
+  }
+
+  if ($forceFileCompletion) {
+    & $completeFiles $filePart $prefix
   } else {
     switch ($exitCode) {
       10 {
-        # File completion behavior
-        $items = if ([string]::IsNullOrEmpty($wordToComplete)) {
-          Get-ChildItem -ErrorAction SilentlyContinue
-        } else {
-          Get-ChildItem -Path "$wordToComplete*" -ErrorAction SilentlyContinue
-        }
-        $items | ForEach-Object {
-          $completionText = if ($_.PSIsContainer) { $_.Name + "/" } else { $_.Name }
-          [System.Management.Automation.CompletionResult]::new(
-            $completionText,
-            $completionText,
-            'ProviderItem',
-            $completionText
-          )
-        }
+        & $completeFiles $wordContent ''
       }
       11 {
         # No reasonable suggestions

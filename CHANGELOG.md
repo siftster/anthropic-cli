@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.32.0 (2026-09-10)
+
+Full Changelog: [v1.31.0...v1.32.0](https://github.com/anthropics/anthropic-cli/compare/v1.31.0...v1.32.0)
+
+### Features
+
+* **api:** add auto mode tool permissions for Managed Agents ([0428ab8](https://github.com/anthropics/anthropic-cli/commit/0428ab889cb7298e84afa3ac8989dfbcae348eb2))
+* **api:** add content_too_large web_fetch tool error code ([a138600](https://github.com/anthropics/anthropic-cli/commit/a138600048210b9dd8e31aac489f77e9093bc451))
+* **api:** add the user-profiles-2026-09-04 beta value and external_user_details to user profiles ([92c17de](https://github.com/anthropics/anthropic-cli/commit/92c17ded09d933f2aa45b796a10bc4cbb374c890))
+* **api:** support mounting public GitHub repositories without an authorization_token in Managed Agents sessions ([a07d5fb](https://github.com/anthropics/anthropic-cli/commit/a07d5fb29650575c72f7d7e92df6cf1e3213d5e2))
+
+
+### Bug Fixes
+
+* **cli:** quote filenames in shell completions ([eaaec6d](https://github.com/anthropics/anthropic-cli/commit/eaaec6deb633c8223cb3d82d00cfa30412284c4c))
+
+
+### Chores
+
+* **docs:** correct the environment scope field description ([108b488](https://github.com/anthropics/anthropic-cli/commit/108b488d5f79503ea9c05fc0a179636ad1e808a7))
+* **internal:** remove generated file header comments ([97a39e5](https://github.com/anthropics/anthropic-cli/commit/97a39e5ea0056bcc8fa0a172193cf59b2b5458df))
+* **internal:** restore package version ([0ccdc5b](https://github.com/anthropics/anthropic-cli/commit/0ccdc5b663cf0e345dec6d14f59e62e72b4c2883))
+* **internal:** restore package version ([cee583f](https://github.com/anthropics/anthropic-cli/commit/cee583f5538db3fec6ae06b3fa4fb89953235ad7))
+* **internal:** stop stamping the package version into generated files ([859c4e8](https://github.com/anthropics/anthropic-cli/commit/859c4e8ebe980599adf9b33c87759d37be43af70))
+
 ## 1.31.0 (2026-09-04)
 
 Full Changelog: [v1.30.0...v1.31.0](https://github.com/anthropics/anthropic-cli/compare/v1.30.0...v1.31.0)

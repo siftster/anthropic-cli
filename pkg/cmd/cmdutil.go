@@ -227,11 +227,16 @@ func loadProfileIfUsable(cmd *cli.Command) (*config.Config, bool) {
 		}
 		// Belt-and-suspenders: profiles written before bootstrap always wrote
 		// client_id (or hand-authored ones) may omit it. Fill in the prod
-		// default so the SDK's refresh path doesn't fail. New bootstraps
-		// always write it (cmd_auth.go), so this is a back-compat shim.
-		// config.LoadProfile returns a fresh pointer per call, so mutating
-		// the returned struct here doesn't leak across callers.
-		if cfg.AuthenticationInfo.UserOAuth != nil && cfg.AuthenticationInfo.UserOAuth.ClientID == "" {
+		// default so the SDK's refresh path doesn't fail — but only when the
+		// credentials can actually refresh: an empty client_id with no
+		// refresh_token is the SDK's static-token profile (a hand-authored
+		// bearer token for a gateway or proxy in front of the API), and
+		// defaulting would push it onto the refresh path and break it. New
+		// bootstraps always write client_id (cmd_auth.go), so this is a
+		// back-compat shim. config.LoadProfile returns a fresh pointer per
+		// call, so mutating the returned struct here doesn't leak across
+		// callers.
+		if cfg.AuthenticationInfo.UserOAuth != nil && cfg.AuthenticationInfo.UserOAuth.ClientID == "" && credentialsCanRefresh(credsPath) {
 			cfg.AuthenticationInfo.UserOAuth.ClientID = oauthClientIDProd
 			clientIDDefaultedOnce.Do(func() {
 				fmt.Fprintln(os.Stderr,
@@ -240,6 +245,23 @@ func loadProfileIfUsable(cmd *cli.Command) (*config.Config, bool) {
 		}
 	}
 	return cfg, explicit
+}
+
+// credentialsCanRefresh reports whether the profile's credentials file holds
+// a refresh_token. Unreadable or malformed files say yes so the legacy
+// defaulting path (and its clearer downstream errors) still runs.
+func credentialsCanRefresh(path string) bool {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return true
+	}
+	var cred struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.Unmarshal(raw, &cred); err != nil {
+		return true
+	}
+	return cred.RefreshToken != ""
 }
 
 // resolveOAuthOption returns request options for the federation credential
